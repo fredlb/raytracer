@@ -32,7 +32,7 @@ type Sphere struct {
 }
 
 type Triangle struct {
-	vertices [3]Vector3
+	normals [3]Vector3
 	shape    Shape
 }
 
@@ -96,6 +96,31 @@ func QuadricSolveReal(a float64, b float64, c float64) (bool, float64, float64) 
 		t1, t2 = t2, t1
 	}
 	return true, t1, t2
+}
+
+func (s Sphere) Intersect(r *Ray) (bool, Intersection) {
+    rayOrigin := r.origin.Sub(&s.shape.position)
+    ray := Ray{origin: rayOrigin, direction: r.direction, mint: r.mint, maxt: r.maxt}
+    var A = ray.direction.Dot(&ray.direction)
+    var B = 2 * ray.direction.Dot(&ray.origin)
+    var C = ray.origin.Dot(&ray.origin) - s.radius*s.radius
+    solution, t1, t2 := QuadricSolveReal(A, B, C)
+    if !solution {
+        return false, Intersection{}
+    }
+    if t1 > ray.maxt || t2 < ray.mint {
+        return false, Intersection{}
+    }
+    thit := t1
+    if t1 < ray.mint {
+        thit = t2
+        if thit > ray.maxt {
+            return false, Intersection{}
+        }
+    }
+    phit := r.origin.Add(&r.direction).Mul(thit)
+    normal := phit.Sub(&s.shape.position)
+    return true, Intersection{point: phit, distance: thit, normal: normal}
 }
 
 func (t Triangle) Intersect(r *Ray) (bool, Intersection) {
