@@ -148,11 +148,10 @@ func Trace(ray *Ray, objects []Intersectable) Vector3 {
 }
 
 func main() {
-	s1 := Sphere{radius: 1, shape: Shape{position: Vector3{x: 0, y: 0, z: 10}}}
-	s2 := Sphere{radius: 1, shape: Shape{position: Vector3{x: 2, y: 2, z: 15}}}
-	s3 := Sphere{radius: 1, shape: Shape{position: Vector3{x: -7, y: 1.5, z: 30}}}
+	s1 := Sphere{radius: 1.5, shape: Shape{position: Vector3{x: -0.5, y: 0, z: 10}}}
+	s2 := Sphere{radius: 1.5, shape: Shape{position: Vector3{x: 0.5, y: 0, z: 10}}}
 
-	objects := []Intersectable{s1, s2, s3}
+	objects := []Intersectable{s1, s2}
 
 	var width int = 640
 	var height int = 500
