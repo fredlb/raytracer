@@ -46,27 +46,6 @@ type Intersection struct {
 	normal   Vector3
 }
 
-func QuadricSolveReal(a float64, b float64, c float64) (bool, float64, float64) {
-	var discriminant float64 = b*b - float64(4)*a*c
-	if discriminant < 0 {
-		return false, 0, 0
-	}
-	var rootDiscriminant = math.Sqrt(discriminant)
-	var q float64
-	if b < 0 {
-		q = float64(-0.5) * (b - rootDiscriminant)
-	} else {
-		q = float64(-0.5) * (b + rootDiscriminant)
-	}
-
-	t1 := q / a
-	t2 := c / q
-	if t1 > t2 {
-		t1, t2 = t2, t1
-	}
-	return true, t1, t2
-}
-
 func (v Vector3) Mul(s float64) Vector3 {
 	return Vector3{x: v.x * s, y: v.y * s, z: v.z * s}
 }
@@ -98,29 +77,25 @@ func (v Vector3) Normalize() Vector3 {
 	return v.Mul(1 / v.Norm())
 }
 
-func (s Sphere) Intersect(r *Ray) (bool, Intersection) {
-	rayOrigin := r.origin.Sub(&s.shape.position)
-	ray := Ray{origin: rayOrigin, direction: r.direction, mint: r.mint, maxt: r.maxt}
-	var A = ray.direction.Dot(&ray.direction)
-	var B = 2 * ray.direction.Dot(&ray.origin)
-	var C = ray.origin.Dot(&ray.origin) - s.radius*s.radius
-	solution, t1, t2 := QuadricSolveReal(A, B, C)
-	if !solution {
-		return false, Intersection{}
+func QuadricSolveReal(a float64, b float64, c float64) (bool, float64, float64) {
+	var discriminant float64 = b*b - float64(4)*a*c
+	if discriminant < 0 {
+		return false, 0, 0
 	}
-	if t1 > ray.maxt || t2 < ray.mint {
-		return false, Intersection{}
+	var rootDiscriminant = math.Sqrt(discriminant)
+	var q float64
+	if b < 0 {
+		q = float64(-0.5) * (b - rootDiscriminant)
+	} else {
+		q = float64(-0.5) * (b + rootDiscriminant)
 	}
-	thit := t1
-	if t1 < ray.mint {
-		thit = t2
-		if thit > ray.maxt {
-			return false, Intersection{}
-		}
+
+	t1 := q / a
+	t2 := c / q
+	if t1 > t2 {
+		t1, t2 = t2, t1
 	}
-	phit := r.origin.Add(&r.direction).Mul(thit)
-	normal := phit.Sub(&s.shape.position)
-	return true, Intersection{point: phit, distance: thit, normal: normal}
+	return true, t1, t2
 }
 
 func (t Triangle) Intersect(r *Ray) (bool, Intersection) {
@@ -165,7 +140,6 @@ func main() {
 	m := image.NewRGBA(image.Rect(0, 0, width, height))
 	black := color.RGBA{0, 0, 0, 255}
 	draw.Draw(m, m.Bounds(), &image.Uniform{black}, image.ZP, draw.Src)
-	spp := 4
 	for i := 0; i < height; i++ {
 		for j := 0; j < width; j++ {
 			var xx float64 = (2*((float64(j)+float64(0.5))*invWidth) - 1) * angle * aspectratio
