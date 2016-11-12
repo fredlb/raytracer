@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -33,7 +34,7 @@ type Sphere struct {
 
 type Triangle struct {
 	normals [3]Vector3
-	shape    Shape
+	shape   Shape
 }
 
 type Intersectable interface {
@@ -51,6 +52,9 @@ func (v Vector3) Mul(s float64) Vector3 {
 }
 
 func (v Vector3) Div(s float64) Vector3 {
+	if s == 0 {
+		panic("Div by zero!")
+	}
 	return Vector3{x: v.x / s, y: v.y / s, z: v.z / s}
 }
 
@@ -60,6 +64,10 @@ func (v Vector3) Add(b *Vector3) Vector3 {
 
 func (v Vector3) Sub(b *Vector3) Vector3 {
 	return Vector3{x: v.x - b.x, y: v.y - b.y, z: v.z - b.z}
+}
+
+func (v Vector3) Inv() Vector3 {
+	return Vector3{x: -v.x, y: -v.y, z: -v.z}
 }
 
 func (v Vector3) Dot(b *Vector3) float64 {
@@ -75,6 +83,29 @@ func (v Vector3) Normalize() Vector3 {
 		return v
 	}
 	return v.Mul(1 / v.Norm())
+}
+
+type LightProperties struct {
+	color     Vector3
+	intensity float64
+}
+
+type PointLight struct {
+	properties LightProperties
+	position   Vector3
+}
+
+type Illuminator interface {
+	Illuminate(point Vector3) (float64, Vector3, Vector3)
+}
+
+func (l PointLight) Illuminate(point Vector3) (float64, Vector3, Vector3) {
+	lightDirection := point.Sub(&l.position)
+	r2 := lightDirection.Norm()
+	distance := math.Sqrt(r2)
+	lightDirAttunated := lightDirection.Div(distance)
+	lightIntensity := l.properties.color.Mul(l.properties.intensity / (4 * math.Pi * r2))
+	return distance, lightDirAttunated, lightIntensity
 }
 
 func QuadricSolveReal(a float64, b float64, c float64) (bool, float64, float64) {
@@ -99,59 +130,96 @@ func QuadricSolveReal(a float64, b float64, c float64) (bool, float64, float64) 
 }
 
 func (s Sphere) Intersect(r *Ray) (bool, Intersection) {
-    rayOrigin := r.origin.Sub(&s.shape.position)
-    ray := Ray{origin: rayOrigin, direction: r.direction, mint: r.mint, maxt: r.maxt}
-    var A = ray.direction.Dot(&ray.direction)
-    var B = 2 * ray.direction.Dot(&ray.origin)
-    var C = ray.origin.Dot(&ray.origin) - s.radius*s.radius
-    solution, t1, t2 := QuadricSolveReal(A, B, C)
-    if !solution {
-        return false, Intersection{}
-    }
-    if t1 > ray.maxt || t2 < ray.mint {
-        return false, Intersection{}
-    }
-    thit := t1
-    if t1 < ray.mint {
-        thit = t2
-        if thit > ray.maxt {
-            return false, Intersection{}
-        }
-    }
-    phit := r.origin.Add(&r.direction).Mul(thit)
-    normal := phit.Sub(&s.shape.position)
-    return true, Intersection{point: phit, distance: thit, normal: normal}
+	rayOrigin := r.origin.Sub(&s.shape.position)
+	ray := Ray{origin: rayOrigin, direction: r.direction, mint: r.mint, maxt: r.maxt}
+	var A = ray.direction.Dot(&ray.direction)
+	var B = 2 * ray.direction.Dot(&ray.origin)
+	var C = ray.origin.Dot(&ray.origin) - s.radius*s.radius
+	solution, t1, t2 := QuadricSolveReal(A, B, C)
+	if !solution {
+		return false, Intersection{}
+	}
+	if t1 > ray.maxt || t2 < ray.mint {
+		return false, Intersection{}
+	}
+	thit := t1
+	if t1 < ray.mint {
+		thit = t2
+		if thit > ray.maxt {
+			return false, Intersection{}
+		}
+	}
+	phit := r.origin.Add(&r.direction).Mul(thit)
+	normal := phit.Sub(&s.shape.position).Normalize()
+	return true, Intersection{point: phit, distance: thit, normal: normal}
 }
 
 func (t Triangle) Intersect(r *Ray) (bool, Intersection) {
 	return true, Intersection{}
 }
 
-func Trace(ray *Ray, objects []Intersectable) Vector3 {
+func CastRay(ray *Ray, objects []Intersectable, lights []Illuminator) Vector3 {
+	intersection := Trace(ray, objects, 1000)
+	if (intersection == Intersection{}) {
+		return Vector3{}
+	}
+	surfaceColor := Vector3{}
+	for _, light := range lights {
+		distanceToLight, lightDirection, lightIntensity := light.Illuminate(intersection.point)
+		invLightDir := lightDirection.Inv().Normalize()
+		lightDirWithBias := invLightDir.Mul(0.001)
+		hitPointWithBias := intersection.point.Add(&lightDirWithBias)
+		shadowRay := Ray{origin: hitPointWithBias, direction: invLightDir, mint: 0, maxt: 1000}
+		lightIntersection := TraceShadowRays(&shadowRay, objects, distanceToLight)
+		if (lightIntersection != Intersection{}) {
+			continue
+		}
+		lightContribution := lightIntensity.Mul(math.Max(float64(0), intersection.normal.Dot(&invLightDir)))
+		surfaceColor = surfaceColor.Add(&lightContribution)
+	}
+	clamped := Vector3{x: math.Min(255, surfaceColor.x*255), y: math.Min(255, surfaceColor.y*255), z: math.Min(255, surfaceColor.z*255)}
+	return clamped
+}
+
+func Trace(ray *Ray, objects []Intersectable, tnear float64) Intersection {
 	var foremostObject = Intersection{}
-	var tnearest float64 = 1000
 	for _, object := range objects {
 		hit, intersection := object.Intersect(ray)
 		if hit {
-			if intersection.distance < tnearest {
-				tnearest = intersection.distance
+			if intersection.distance < tnear {
+				tnear = intersection.distance
 				foremostObject = intersection
 			}
 		}
 	}
-	if (foremostObject == Intersection{}) {
-		return Vector3{}
+	return foremostObject
+}
+
+func TraceShadowRays(ray *Ray, objects []Intersectable, distanceToLight float64) Intersection {
+	for _, object := range objects {
+		hit, intersection := object.Intersect(ray)
+		if hit && intersection.distance < distanceToLight {
+			return intersection
+		}
 	}
-	lightDirection := Vector3{x: 0.5, y: 1, z: -1}.Normalize()
-	surfaceColor := Vector3{x: 255, y: 255, z: 255}.Mul(math.Max(float64(0), foremostObject.normal.Dot(&lightDirection)))
-	return surfaceColor
+	return Intersection{}
 }
 
 func main() {
-	s1 := Sphere{radius: 1.5, shape: Shape{position: Vector3{x: -0.5, y: 0, z: 10}}}
-	s2 := Sphere{radius: 1.5, shape: Shape{position: Vector3{x: 0.5, y: 0, z: 10}}}
+	fmt.Println("lets trace!")
+	// Two boring spheres
+	//s1 := Sphere{radius: 1, shape: Shape{position: Vector3{x: 1, y: 0, z: 7.5}}}
+	//s2 := Sphere{radius: 1, shape: Shape{position: Vector3{x: -1, y: 0, z: 10}}}
+	// A butt
+	s1 := Sphere{radius: 1.5, shape: Shape{position: Vector3{x: 1, y: 0, z: 10}}}
+	s2 := Sphere{radius: 1.5, shape: Shape{position: Vector3{x: -1, y: 0, z: 10}}}
+
+	l1 := PointLight{
+		properties: LightProperties{color: Vector3{x: 255, y: 255, z: 255}, intensity: float64(1)},
+		position:   Vector3{x: 6, y: 0, z: 7}}
 
 	objects := []Intersectable{s1, s2}
+	lights := []Illuminator{l1}
 
 	var width int = 640
 	var height int = 500
@@ -172,7 +240,7 @@ func main() {
 				origin:    Vector3{x: 0, y: 0, z: 0},
 				direction: Vector3{xx, yy, 1}.Normalize(),
 				mint:      0, maxt: 1000}
-			pixel := Trace(&cameraRay, objects)
+			pixel := CastRay(&cameraRay, objects, lights)
 			if (pixel != Vector3{}) {
 				pixelColor := color.RGBA{uint8(pixel.x), uint8(pixel.y), uint8(pixel.z), 255}
 				m.Set(j, i, pixelColor)
