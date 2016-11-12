@@ -32,6 +32,11 @@ type Sphere struct {
 	shape  Shape
 }
 
+type Plane struct {
+	shape  Shape
+	normal Vector3
+}
+
 type Triangle struct {
 	normals [3]Vector3
 	shape   Shape
@@ -154,6 +159,20 @@ func (s Sphere) Intersect(r *Ray) (bool, Intersection) {
 	return true, Intersection{point: phit, distance: thit, normal: normal}
 }
 
+func (p Plane) Intersect(r *Ray) (bool, Intersection) {
+	den := r.direction.Dot(&p.normal)
+	if math.Abs(den) < 0.0000001 {
+		return false, Intersection{}
+	}
+	rayToPlane := p.shape.position.Sub(&r.origin)
+	t := rayToPlane.Dot(&p.normal) / den
+	if t < 0 {
+		return false, Intersection{}
+	}
+	phit := r.origin.Add(&r.direction).Mul(t)
+	return true, Intersection{point: phit, distance: t, normal: p.normal}
+}
+
 func (t Triangle) Intersect(r *Ray) (bool, Intersection) {
 	return true, Intersection{}
 }
@@ -206,23 +225,21 @@ func TraceShadowRays(ray *Ray, objects []Intersectable, distanceToLight float64)
 }
 
 func main() {
-	fmt.Println("lets trace!")
-	// Two boring spheres
-	//s1 := Sphere{radius: 1, shape: Shape{position: Vector3{x: 1, y: 0, z: 7.5}}}
-	//s2 := Sphere{radius: 1, shape: Shape{position: Vector3{x: -1, y: 0, z: 10}}}
+	fmt.Println("lets trace some butts!")
 	// A butt
 	s1 := Sphere{radius: 1.5, shape: Shape{position: Vector3{x: 1, y: 0, z: 10}}}
 	s2 := Sphere{radius: 1.5, shape: Shape{position: Vector3{x: -1, y: 0, z: 10}}}
+	p1 := Plane{normal: Vector3{x: 0, y: 1, z: 0}.Normalize(), shape: Shape{position: Vector3{x: 0, y: -1.5, z: 0}}}
 
 	l1 := PointLight{
-		properties: LightProperties{color: Vector3{x: 255, y: 255, z: 255}, intensity: float64(1)},
-		position:   Vector3{x: 6, y: 0, z: 7}}
+		properties: LightProperties{color: Vector3{x: 255, y: 255, z: 255}, intensity: float64(10)},
+		position:   Vector3{x: 6, y: 15, z: 7}}
 
-	objects := []Intersectable{s1, s2}
+	objects := []Intersectable{s1, s2, p1}
 	lights := []Illuminator{l1}
 
-	var width int = 640
-	var height int = 500
+	var width int = 800
+	var height int = 600
 	var invWidth float64 = 1 / float64(width)
 	var invHeight float64 = 1 / float64(height)
 	var fov float64 = 30
