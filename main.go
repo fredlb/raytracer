@@ -287,7 +287,7 @@ func Radiance(ray *Ray, objects []Intersectable, lights []SphereLight, depth int
 		z: sample.x*Nb.z + sample.y*orientedSurfaceNormal.z + sample.z*Nt.z,
 	}
 	indirectRay := Ray{
-		origin:    intersection.point.Add2(sampleWorld).Mul(0.00000001),
+		origin:    intersection.point.Add2(sampleWorld).Mul(0.0000001),
 		direction: sampleWorld.Normalize(),
 		mint:      0.0001,
 		maxt:      1000,
@@ -321,7 +321,8 @@ func Radiance(ray *Ray, objects []Intersectable, lights []SphereLight, depth int
 		lsv := sv.Mul(math.Sin(phi) * sinA)
 		lsw := sw.Mul(cosA)
 		l := lsu.Add(&lsv)
-		l = l.Add2(lsw).Normalize()
+		l = l.Add2(lsw)
+		l = l.Normalize()
 
 		distance := math.Sqrt(lolDot)
 		sr := Ray{origin: intersection.point, direction: l, mint: 0.0001, maxt: 1000}
@@ -334,6 +335,7 @@ func Radiance(ray *Ray, objects []Intersectable, lights []SphereLight, depth int
 			em = em.Add2(lightContribution)
 		}
 	}
+	return em
 	//newRay := Ray{origin: intersection.point.Add2(d2).Mul(0.0000000001), direction: d2.Normalize(), mint: 0.0001, maxt: 100000}
 	return em.Add2(brdfMod.MulVector32(Radiance(&indirectRay, objects, lights, depth+1, 0.0, rnd)))
 }
@@ -395,31 +397,31 @@ func main() {
 
 	// A butt
 	//p1 := Plane{normal: Vector3{x: 0, y: 1, z: 0}, shape: Shape{position: Vector3{x: 0, y: -10, z: 0}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s2 := Sphere{radius: 4.0, shape: Shape{position: Vector3{x: -3.0, y: -6.0, z: 35}, color: Vector3{x: 0.95, y: 0.95, z: 0.95}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s1 := Sphere{radius: 4.0, shape: Shape{position: Vector3{x: 3.0, y: -6.0, z: 35}, color: Vector3{x: 0.95, y: 0.95, z: 0.95}, emissive: Vector3{x: 0, y: 0, z: 0}}}
+	s2 := Sphere{radius: 5.0, shape: Shape{position: Vector3{x: 0.0, y: -5.2, z: 40}, color: Vector3{x: 0.85, y: 0.85, z: 0.85}, emissive: Vector3{x: 0, y: 0, z: 0}}}
+	//s1 := Sphere{radius: 5.0, shape: Shape{position: Vector3{x: 5.0, y: -5.0, z: 40}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
 	s3 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 0, y: -100010, z: 10}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s4 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: -100015, y: 0, z: 10}, color: Vector3{x: 0.95, y: 0.25, z: 0.25}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s6 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 100015, y: 0, z: 10}, color: Vector3{x: 0.25, y: 0.25, z: 0.95}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s5 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 0, y: 0, z: 100050}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s8 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 0, y: 0, z: -100050}, color: Vector3{x: 0, y: 0, z: 0}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s7 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 0, y: 100010, z: 10}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
+	s4 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: -100015, y: 0, z: 10}, color: Vector3{x: 0.75, y: 0.25, z: 0.25}, emissive: Vector3{x: 0, y: 0, z: 0}}}
+	s6 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 100015, y: 0, z: 10}, color: Vector3{x: 0.25, y: 0.75, z: 0.25}, emissive: Vector3{x: 0, y: 0, z: 0}}}
+	s5 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 0, y: 0, z: 100070}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
+	s8 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 0, y: 0, z: -100050}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
+	s7 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 0, y: 100055, z: 10}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
 
 	sl1 := SphereLight{
-		sphere:   Sphere{radius: 1.0, shape: Shape{position: Vector3{x: 0, y: 7, z: 30}, emissive: Vector3{x: 0, y: 0, z: 0}}},
-		emission: Vector3{x: 100, y: 100, z: 100},
+		sphere:   Sphere{radius: 3, shape: Shape{position: Vector3{x: 0, y: 30, z: 10}, emissive: Vector3{x: 0, y: 0, z: 0}}},
+		emission: Vector3{x: 150, y: 150, z: 150},
 	}
-	objects := []Intersectable{s1, s2, s4, s5, s6, s7, s3, s8}
+	objects := []Intersectable{s2, s4, s5, s6, s7, s3, s8}
 	sphereLights := []SphereLight{sl1}
 
 	var width int = 512
 	var height int = 384
 	var invWidth float64 = 1 / float64(width)
 	var invHeight float64 = 1 / float64(height)
-	var fov float64 = 40
+	var fov float64 = 35
 	var aspectratio float64 = float64(width) / float64(height)
 	var angle float64 = math.Tan(math.Pi * 0.5 * fov / 180)
 
-	spp := 64
+	spp := 16
 	ncpu := 4
 	runtime.GOMAXPROCS(ncpu)
 	ch := make(chan int, height)
