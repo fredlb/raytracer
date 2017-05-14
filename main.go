@@ -14,10 +14,6 @@ import (
 	"time"
 )
 
-type Vector3 struct {
-	x, y, z float64
-}
-
 type Ray struct {
 	origin    Vector3
 	direction Vector3
@@ -37,16 +33,6 @@ type Sphere struct {
 	shape  Shape
 }
 
-type Plane struct {
-	shape  Shape
-	normal Vector3
-}
-
-type Triangle struct {
-	normals [3]Vector3
-	shape   Shape
-}
-
 type Intersectable interface {
 	Intersect(*Ray) (bool, Intersection)
 }
@@ -58,185 +44,60 @@ type Intersection struct {
 	shape    Shape
 }
 
-func (v Vector3) Mul(s float64) Vector3 {
-	return Vector3{x: v.x * s, y: v.y * s, z: v.z * s}
-}
-
-func (v Vector3) Div(s float64) Vector3 {
-	if s == 0 {
-		panic("Div by zero!")
-	}
-	return Vector3{x: v.x / s, y: v.y / s, z: v.z / s}
-}
-
-func (v Vector3) Add(b *Vector3) Vector3 {
-	return Vector3{x: v.x + b.x, y: v.y + b.y, z: v.z + b.z}
-}
-
-func (v Vector3) Add2(b Vector3) Vector3 {
-	return Vector3{x: v.x + b.x, y: v.y + b.y, z: v.z + b.z}
-}
-
-func (v Vector3) Sub(b *Vector3) Vector3 {
-	return Vector3{x: v.x - b.x, y: v.y - b.y, z: v.z - b.z}
-}
-
-func (v Vector3) Inv() Vector3 {
-	return Vector3{x: -v.x, y: -v.y, z: -v.z}
-}
-
-func (v Vector3) Dot(b *Vector3) float64 {
-	return (v.x * b.x) + (v.y * b.y) + (v.z * b.z)
-}
-
-func (v Vector3) MulVector3(b *Vector3) Vector3 {
-	return Vector3{
-		x: v.x * b.x,
-		y: v.y * b.y,
-		z: v.z * b.z,
-	}
-}
-
-func (v Vector3) MulVector32(b Vector3) Vector3 {
-	return Vector3{
-		x: v.x * b.x,
-		y: v.y * b.y,
-		z: v.z * b.z,
-	}
-}
-
-func (v Vector3) Norm() float64 {
-	return v.Dot(&v)
-}
-
-func (v Vector3) Normalize() Vector3 {
-	return v.Mul(1.0 / math.Sqrt(v.x*v.x+v.y*v.y+v.z*v.z))
-}
-
-func (v Vector3) CrossProduct(b *Vector3) Vector3 {
-	return Vector3{
-		x: v.y*b.z - v.z*b.y,
-		y: v.z*b.x - v.x*b.z,
-		z: v.x*b.y - v.y*b.x,
-	}
-}
-
 type SphereLight struct {
 	sphere   Sphere
 	emission Vector3
 }
 
-type LightProperties struct {
-	color     Vector3
-	intensity float64
-}
-
-type PointLight struct {
-	properties LightProperties
-	position   Vector3
-}
-
-type Illuminator interface {
-	Illuminate(point Vector3) (float64, Vector3, Vector3)
-}
-
-func (l PointLight) Illuminate(point Vector3) (float64, Vector3, Vector3) {
-	lightDirection := point.Sub(&l.position)
-	r2 := lightDirection.Norm()
-	distance := math.Sqrt(r2)
-	lightDirAttunated := lightDirection.Div(distance)
-	lightIntensity := l.properties.color.Mul(l.properties.intensity / (4 * math.Pi * r2))
-	return distance, lightDirAttunated, lightIntensity
-}
-
-func QuadricSolveReal(a float64, b float64, c float64) (bool, float64, float64) {
-	var discriminant float64 = b*b - float64(4)*a*c
-	if discriminant < 0 {
-		return false, 0, 0
-	}
-	var rootDiscriminant = math.Sqrt(discriminant)
-	var q float64
-	if b < 0 {
-		q = float64(-0.5) * (b - rootDiscriminant)
-	} else {
-		q = float64(-0.5) * (b + rootDiscriminant)
-	}
-
-	t1 := q / a
-	t2 := c / q
-	if t1 > t2 {
-		t1, t2 = t2, t1
-	}
-	return true, t1, t2
-}
-
 func (s Sphere) Intersect(r *Ray) (bool, Intersection) {
-	rayOrigin := r.origin.Sub(&s.shape.position)
-	ray := Ray{origin: rayOrigin, direction: r.direction, mint: r.mint, maxt: r.maxt}
-	var A = ray.direction.Dot(&ray.direction)
-	var B = 2 * ray.direction.Dot(&ray.origin)
-	var C = ray.origin.Dot(&ray.origin) - s.radius*s.radius
-	solution, t1, t2 := QuadricSolveReal(A, B, C)
-	if !solution {
-		return false, Intersection{}
-	}
-	if t1 > ray.maxt || t2 < ray.mint {
-		return false, Intersection{}
-	}
-	thit := t1
-	if t1 < ray.mint {
-		thit = t2
-		if thit > ray.maxt {
-			return false, Intersection{}
+	to := r.origin.Sub(s.shape.position)
+	b := to.Dot(r.direction)
+	c := to.Dot(to) - s.radius*s.radius
+	d := b*b - c
+	if d > 0 {
+		d = math.Sqrt(d)
+		t1 := -b - d
+		if t1 > 1e-9 {
+			phit := r.origin.Add(r.direction.Mul(t1))
+			normal := phit.Sub(s.shape.position)
+			normal = normal.Normalize()
+			return true, Intersection{point: phit, distance: t1, normal: normal, shape: s.shape}
+		}
+		t2 := -b + d
+		if t2 > 1e-9 {
+			phit := r.origin.Add(r.direction.Mul(t2))
+			normal := phit.Sub(s.shape.position)
+			normal = normal.Normalize()
+			return true, Intersection{point: phit, distance: t2, normal: normal, shape: s.shape}
 		}
 	}
-	phit := r.origin.Add(&r.direction).Mul(thit)
-	normal := phit.Sub(&s.shape.position).Normalize()
-	return true, Intersection{point: phit, distance: thit, normal: normal, shape: s.shape}
-}
-
-func (p Plane) Intersect(r *Ray) (bool, Intersection) {
-	den := r.direction.Dot(&p.normal)
-	if math.Abs(den) < 0.0000001 {
-		return false, Intersection{}
-	}
-	rayToPlane := p.shape.position.Sub(&r.origin)
-	t := rayToPlane.Dot(&p.normal) / den
-	if t < 0 {
-		return false, Intersection{}
-	}
-	phit := r.origin.Add(&r.direction).Mul(t)
-	return true, Intersection{point: phit, distance: t, normal: p.normal, shape: p.shape}
-}
-
-func (t Triangle) Intersect(r *Ray) (bool, Intersection) {
-	return true, Intersection{}
+	return false, Intersection{}
 }
 
 func Radiance(ray *Ray, objects []Intersectable, lights []SphereLight, depth int, emittance float64, rnd *rand.Rand) Vector3 {
 	intersection := Trace(ray, objects, 10000000)
 	if depth > 10 {
-		return Vector3{x: 0, y: 0, z: 0}
+		return Vector3{X: 0, Y: 0, Z: 0}
 	}
 	if (intersection == Intersection{}) {
-		return Vector3{x: 0, y: 0, z: 0}
+		return Vector3{X: 0, Y: 0, Z: 0}
 	}
 
-	orientedSurfaceNormal := Vector3{}
-	if intersection.normal.Dot(&ray.direction) < 0.0 {
-		orientedSurfaceNormal = intersection.normal
-	} else {
-		orientedSurfaceNormal = intersection.normal.Inv()
-	}
+    orientedSurfaceNormal := Vector3{}
+    if intersection.normal.Dot(ray.direction) < 0.0 {
+        orientedSurfaceNormal = intersection.normal
+    } else {
+        orientedSurfaceNormal = intersection.normal.Inv()
+    }
 
 	brdfMod := intersection.shape.color
 	var p float64
-	if brdfMod.x > brdfMod.y && brdfMod.x > brdfMod.z {
-		p = brdfMod.x
-	} else if brdfMod.y > brdfMod.z {
-		p = brdfMod.y
+	if brdfMod.X > brdfMod.Y && brdfMod.X > brdfMod.Z {
+		p = brdfMod.X
+	} else if brdfMod.Y > brdfMod.Z {
+		p = brdfMod.Y
 	} else {
-		p = brdfMod.z
+		p = brdfMod.Z
 	}
 
 	if depth+1 > 5 {
@@ -244,120 +105,74 @@ func Radiance(ray *Ray, objects []Intersectable, lights []SphereLight, depth int
 			brdfMod = brdfMod.Mul(0.9 / p)
 		} else {
 			//Russian roulette
-			return Vector3{x: 0, y: 0, z: 0}
+            // TODO: This should take emittance in to account
+			return Vector3{X: 0, Y: 0, Z: 0}
 		}
 	}
 
-	//dr1 := 2 * math.Pi * rand.Float64()
-	//dr2 := rand.Float64()
-	//dr2s := math.Sqrt(dr2)
-	//w := orientedSurfaceNormal
-	//var u Vector3
-	//if math.Abs(w.x) > float64(0.1) {
-	//u = Vector3{x: 0, y: 1, z: 0}
-	//} else {
-	//u = Vector3{x: 1, y: 0, z: 0}
-	//}
-	//u = u.CrossProduct(&w).Normalize()
-	//v := w.CrossProduct(&u)
+    dr1 := 2 * math.Pi * rand.Float64()
+    dr2 := rand.Float64()
+    dr2s := math.Sqrt(dr2)
+    w := orientedSurfaceNormal
+    var u Vector3
+    if math.Abs(w.X) > float64(0.1) {
+        u = Vector3{X: 0, Y: 1, Z: 0}
+    } else {
+        u = Vector3{X: 1, Y: 0, Z: 0}
+    }
+    u = u.CrossProduct(w).Normalize()
+    v := w.CrossProduct(u)
 
-	//d2 := u.Mul(math.Cos(dr1) * dr2s).Add2(v.Mul(math.Sin(dr1) * dr2s)).Add2(w.Mul(math.Sqrt(1.0 - dr2)))
+    d2 := u.Mul(math.Cos(dr1) * dr2s).Add(v.Mul(math.Sin(dr1) * dr2s)).Add(w.Mul(math.Sqrt(1.0 - dr2)))
 
-	//var randy, randx, randz, magnitude float64
+    indirectRay := Ray{
+        origin:    intersection.point,
+        direction: d2.Normalize(),
+        mint:      0.0001,
+        maxt:      1000,
+    }
 
-	//for ok := true; ok; ok = (magnitude > 1.0) {
-	//randx = 2.0*rand.Float64() - 1.0
-	//randy = 2.0*rand.Float64() - 1.0
-	//randz = 2.0*rand.Float64() - 1.0
-	//magnitude = math.Sqrt(randx*randx + randy*randy + randz*randz)
-	//}
-
-	//d := Vector3{x: randx / magnitude, y: randy / magnitude, z: randz / magnitude}
-	//if d.Dot(&orientedSurfaceNormal) < 0.0 {
-	//d = d.Inv()
-	//}
-
-	r1 := rnd.Float64()
-	r2 := rnd.Float64()
-	sample := UniformSampleHemisphere(r1, r2)
-	Nt, Nb := CreateCoordinateSystem(intersection.normal)
-	sampleWorld := Vector3{
-		x: sample.x*Nb.x + sample.y*orientedSurfaceNormal.x + sample.z*Nt.x,
-		y: sample.x*Nb.y + sample.y*orientedSurfaceNormal.y + sample.z*Nt.y,
-		z: sample.x*Nb.z + sample.y*orientedSurfaceNormal.z + sample.z*Nt.z,
-	}
-	indirectRay := Ray{
-		origin:    intersection.point.Add2(sampleWorld).Mul(0.0000001),
-		direction: sampleWorld.Normalize(),
-		mint:      0.0001,
-		maxt:      1000,
-	}
-	//normalWBias := orientedSurfaceNormal.Mul(0.0001)
-	//hitPointWithBias := intersection.point.Add2(orientedSurfaceNormal.Mul(0.0001))
-
-	em := Vector3{x: 0, y: 0, z: 0}
+	em := Vector3{X: 0, Y: 0, Z: 0}
 	for _, light := range lights {
-		sw := light.sphere.shape.position.Sub(&intersection.point)
-		su := Vector3{}
-		if math.Abs(sw.x) > float64(0.1) {
-			su = Vector3{x: 0, y: 1, z: 0}
-		} else {
-			su = Vector3{x: 1, y: 0, z: 0}
-		}
-		su = su.CrossProduct(&sw)
-		su = su.Normalize()
-		sv := sw.CrossProduct(&su)
+        sw := light.sphere.shape.position.Sub(intersection.point)
+        su := Vector3{}
+        if math.Abs(sw.X) > float64(0.1) {
+            su = Vector3{X: 0, Y: 1, Z: 0}
+        } else {
+            su = Vector3{X: 1, Y: 0, Z: 0}
+        }
+        su = su.CrossProduct(sw)
+        su = su.Normalize()
+        sv := sw.CrossProduct(su)
 
-		temp := intersection.point.Sub(&light.sphere.shape.position)
-		lolDot := temp.Norm()
-		cosAMax := math.Sqrt(float64(1) - light.sphere.radius*light.sphere.radius/lolDot)
-		eps1 := rand.Float64()
-		eps2 := rand.Float64()
-		cosA := float64(1.0) - eps1 + eps1*cosAMax
-		sinA := math.Sqrt(float64(1.0) - cosA*cosA)
-		phi := 2 * math.Pi * eps2
+        temp := intersection.point.Sub(light.sphere.shape.position)
+        lolDot := temp.Norm()
+        cosAMax := math.Sqrt(float64(1) - (light.sphere.radius*light.sphere.radius)/lolDot)
+        eps1 := rand.Float64()
+        eps2 := rand.Float64()
+        cosA := float64(1.0) - eps1 + eps1*cosAMax
+        sinA := math.Sqrt(float64(1.0) - cosA*cosA)
+        phi := 2 * math.Pi * eps2
 
-		lsu := su.Mul(math.Cos(phi) * sinA)
-		lsv := sv.Mul(math.Sin(phi) * sinA)
-		lsw := sw.Mul(cosA)
-		l := lsu.Add(&lsv)
-		l = l.Add2(lsw)
-		l = l.Normalize()
+        lsu := su.Mul(math.Cos(phi) * sinA)
+        lsv := sv.Mul(math.Sin(phi) * sinA)
+        lsw := sw.Mul(cosA)
+        l := lsu.Add(lsv)
+        l = l.Add(lsw)
+        l = l.Normalize()
 
-		distance := math.Sqrt(lolDot)
-		sr := Ray{origin: intersection.point, direction: l, mint: 0.0001, maxt: 1000}
-		shadowRay := Trace(&sr, objects, distance)
-		lightRay := Trace(&sr, []Intersectable{light.sphere}, distance)
-		if (shadowRay == Intersection{} && lightRay != Intersection{}) {
-			omega := 2.0 * math.Pi * (1.0 - cosAMax)
-			lightAngle := orientedSurfaceNormal.Dot(&l)
-			lightContribution := brdfMod.MulVector32(light.emission.Mul(lightAngle)).Mul(omega).Div(math.Pi)
-			em = em.Add2(lightContribution)
-		}
+        distance := math.Sqrt(lolDot)
+        sr := Ray{origin: intersection.point, direction: l, mint: 0.0001, maxt: 100000}
+        shadowRay := Trace(&sr, objects, distance)
+        lightRay := Trace(&sr, []Intersectable{light.sphere}, distance)
+        if (shadowRay == Intersection{} && lightRay != Intersection{}) {
+            omega := 2.0 * math.Pi * (1.0 - cosAMax)
+            lightAngle := orientedSurfaceNormal.Dot(l)
+            lightContribution := brdfMod.MulVec(light.emission.Mul(lightAngle)).Mul(omega).Div(math.Pi)
+            em = em.Add(lightContribution)
+        }
 	}
-	return em
-	//newRay := Ray{origin: intersection.point.Add2(d2).Mul(0.0000000001), direction: d2.Normalize(), mint: 0.0001, maxt: 100000}
-	return em.Add2(brdfMod.MulVector32(Radiance(&indirectRay, objects, lights, depth+1, 0.0, rnd)))
-}
-
-func UniformSampleHemisphere(r1 float64, r2 float64) Vector3 {
-	sinTheta := math.Sqrt(1.0 - r1*r1)
-	phi := 2.0 * math.Pi * r2
-	x := sinTheta * math.Cos(phi)
-	z := sinTheta * math.Sin(phi)
-	return Vector3{x: x, y: r1, z: z}.Normalize()
-}
-
-func CreateCoordinateSystem(normal Vector3) (Vector3, Vector3) {
-	Nt := Vector3{}
-	if math.Abs(normal.x) > math.Abs(normal.y) {
-		Nt = Vector3{x: normal.z, y: 0, z: -normal.x}.Div(math.Sqrt(normal.x*normal.x + normal.z*normal.z))
-	} else {
-		Nt = Vector3{x: 0, y: -normal.z, z: normal.y}.Div(math.Sqrt(normal.y*normal.y + normal.z*normal.z))
-	}
-
-	Nb := normal.CrossProduct(&Nt)
-	return Nt, Nb
+	return em.Add(brdfMod.MulVec(Radiance(&indirectRay, objects, lights, depth+1, 0.0, rnd)))
 }
 
 func Trace(ray *Ray, objects []Intersectable, tnear float64) Intersection {
@@ -396,32 +211,27 @@ func main() {
 	fmt.Println("lets trace some butts!")
 
 	// A butt
-	//p1 := Plane{normal: Vector3{x: 0, y: 1, z: 0}, shape: Shape{position: Vector3{x: 0, y: -10, z: 0}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s2 := Sphere{radius: 5.0, shape: Shape{position: Vector3{x: 0.0, y: -5.2, z: 40}, color: Vector3{x: 0.85, y: 0.85, z: 0.85}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	//s1 := Sphere{radius: 5.0, shape: Shape{position: Vector3{x: 5.0, y: -5.0, z: 40}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s3 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 0, y: -100010, z: 10}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s4 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: -100015, y: 0, z: 10}, color: Vector3{x: 0.75, y: 0.25, z: 0.25}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s6 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 100015, y: 0, z: 10}, color: Vector3{x: 0.25, y: 0.75, z: 0.25}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s5 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 0, y: 0, z: 100070}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s8 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 0, y: 0, z: -100050}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
-	s7 := Sphere{radius: 100000, shape: Shape{position: Vector3{x: 0, y: 100055, z: 10}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
+    //p1 := Plane{normal: Vector3{x: 0, y: 1, z: 0}, shape: Shape{position: Vector3{x: 0, y: -10, z: 0}, color: Vector3{x: 0.75, y: 0.75, z: 0.75}, emissive: Vector3{x: 0, y: 0, z: 0}}}
+	s2 := Sphere{radius: 5.0, shape: Shape{position: Vector3{X: 0.0, Y: -5.2, Z: 40}, color: Vector3{X: 0.85, Y: 0.85, Z: 0.85}, emissive: Vector3{X: 0, Y: 0, Z: 0}}}
+	//s1 := Sphere{radius: 5.0, shape: Shape{position: Vector3{X: 5.0, Y: -5.0, Z: 40}, color: Vector3{X: 0.75, Y: 0.75, Z: 0.75}, emissive: Vector3{X: 0, Y: 0, Z: 0}}}
+	s3 := Sphere{radius: 100000, shape: Shape{position: Vector3{X: 0, Y: -100010, Z: 10}, color: Vector3{X: 0.75, Y: 0.75, Z: 0.75}, emissive: Vector3{X: 0, Y: 0, Z: 0}}}
+	s4 := Sphere{radius: 100000, shape: Shape{position: Vector3{X: -100015, Y: 0, Z: 10}, color: Vector3{X: 0.75, Y: 0.25, Z: 0.25}, emissive: Vector3{X: 0, Y: 0, Z: 0}}}
+	s6 := Sphere{radius: 100000, shape: Shape{position: Vector3{X: 100015, Y: 0, Z: 10}, color: Vector3{X: 0.25, Y: 0.75, Z: 0.25}, emissive: Vector3{X: 0, Y: 0, Z: 0}}}
+	s5 := Sphere{radius: 100000, shape: Shape{position: Vector3{X: 0, Y: 0, Z: 100070}, color: Vector3{X: 0.75, Y: 0.75, Z: 0.75}, emissive: Vector3{X: 0, Y: 0, Z: 0}}}
+	s8 := Sphere{radius: 100000, shape: Shape{position: Vector3{X: 0, Y: 0, Z: -100050}, color: Vector3{X: 0.75, Y: 0.75, Z: 0.75}, emissive: Vector3{X: 0, Y: 0, Z: 0}}}
+	s7 := Sphere{radius: 100000, shape: Shape{position: Vector3{X: 0, Y: 100055, Z: 10}, color: Vector3{X: 0.75, Y: 0.75, Z: 0.75}, emissive: Vector3{X: 0, Y: 0, Z: 0}}}
 
 	sl1 := SphereLight{
-		sphere:   Sphere{radius: 3, shape: Shape{position: Vector3{x: 0, y: 30, z: 10}, emissive: Vector3{x: 0, y: 0, z: 0}}},
-		emission: Vector3{x: 150, y: 150, z: 150},
+		sphere:   Sphere{radius: 1.2, shape: Shape{position: Vector3{X: 0, Y: 30, Z: 40}, emissive: Vector3{X: 0, Y: 0, Z: 0}}},
+		emission: Vector3{X: 550, Y: 550, Z: 550},
 	}
 	objects := []Intersectable{s2, s4, s5, s6, s7, s3, s8}
 	sphereLights := []SphereLight{sl1}
 
 	var width int = 512
 	var height int = 384
-	var invWidth float64 = 1 / float64(width)
-	var invHeight float64 = 1 / float64(height)
-	var fov float64 = 35
-	var aspectratio float64 = float64(width) / float64(height)
-	var angle float64 = math.Tan(math.Pi * 0.5 * fov / 180)
 
-	spp := 16
+	spp := 32
 	ncpu := 4
 	runtime.GOMAXPROCS(ncpu)
 	ch := make(chan int, height)
@@ -429,30 +239,23 @@ func main() {
 	black := color.RGBA{0, 0, 0, 255}
 	draw.Draw(m, m.Bounds(), &image.Uniform{black}, image.ZP, draw.Src)
 	fmt.Println(ncpu)
+
+	camera := LookAt(Vector3{0, 0, 0}, Vector3{0, 0, 100}, Vector3{0, 1, 0}, 35)
 	start := time.Now()
 	for cpu := 0; cpu < ncpu; cpu++ {
 		go func(cpu int) {
 			rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 			for i := cpu; i < height; i += ncpu {
 				for j := 0; j < width; j++ {
-					pixel := Vector3{x: 0, y: 0, z: 0}
+					pixel := Vector3{X: 0, Y: 0, Z: 0}
 					for s := 0; s < spp; s++ {
 						r1 := rnd.Float64()
 						r2 := rnd.Float64()
-						//r1 := 0.5
-						//r2 := 0.5
-						var xx float64 = (2*((float64(j)+r1)*invWidth) - 1) * angle * aspectratio
-						var yy float64 = (1 - 2*((float64(i)+r2)*invHeight)) * angle
-						cameraRay := Ray{
-							origin:    Vector3{x: 0, y: 0, z: 0},
-							direction: Vector3{xx, yy, 1}.Normalize(),
-							mint:      0.0001, maxt: 10000000,
-						}
-
-						pixel = pixel.Add2(Radiance(&cameraRay, objects, sphereLights, 0, 1, rnd).Div(float64(spp)))
+						ray := camera.CastRay(j, i, width, height, r1, r2)
+						pixel = pixel.Add(Radiance(&ray, objects, sphereLights, 0, 1, rnd).Div(float64(spp)))
 					}
-					pixel = Vector3{x: Clamp(pixel.x), y: Clamp(pixel.y), z: Clamp(pixel.z)}
-					pixelColor := color.RGBA{ToInteger(pixel.x), ToInteger(pixel.y), ToInteger(pixel.z), 255}
+					pixel = Vector3{X: Clamp(pixel.X), Y: Clamp(pixel.Y), Z: Clamp(pixel.Z)}
+					pixelColor := color.RGBA{ToInteger(pixel.X), ToInteger(pixel.Y), ToInteger(pixel.Z), 255}
 					m.Set(j, i, pixelColor)
 				}
 				ch <- 1
